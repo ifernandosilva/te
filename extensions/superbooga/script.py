@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 from modules import chat
 from modules.logging_colors import logger
 
-from .chromadb import add_chunks_to_collector, make_collector
+from .chromadb import add_chunks_to_collector, make_embedder, make_collector
 from .download_urls import download_urls
 
 params = {
@@ -16,12 +16,22 @@ params = {
     'time_weight': 0,
     'chunk_length': 700,
     'chunk_separator': '',
+    'document_template': '<|text|>',
+    'query_template': '<|text|>',
     'strong_cleanup': False,
     'threads': 4,
+    'embedder_model_type': None,
+    'embedder_model_name_or_path': None,
 }
 
-collector = make_collector()
-chat_collector = make_collector()
+
+def setup() -> None:
+    global embedder, collector, chat_collector
+    if not params['embedder_model_type']:
+        logger.warning('No embedder model type provided. Using default embedder.')
+    embedder = make_embedder(model_type=params['embedder_model_type'], model_name_or_path=params['embedder_model_name_or_path'], document_template=params['document_template'], query_template=params['query_template'])
+    collector = make_collector(embedder)
+    chat_collector = make_collector(embedder)
 
 
 def feed_data_into_collector(corpus, chunk_len, chunk_sep):
@@ -84,12 +94,14 @@ def feed_url_into_collector(urls, chunk_len, chunk_sep, strong_cleanup, threads)
         yield i
 
 
-def apply_settings(chunk_count, chunk_count_initial, time_weight):
-    global params
+def apply_settings(chunk_count, chunk_count_initial, time_weight, document_template, query_template):
+    global params, embedder
     params['chunk_count'] = int(chunk_count)
     params['chunk_count_initial'] = int(chunk_count_initial)
     params['time_weight'] = time_weight
-    settings_to_display = {k: params[k] for k in params if k in ['chunk_count', 'chunk_count_initial', 'time_weight']}
+    params['document_template'] = embedder.document_template = document_template
+    params['query_template'] = embedder.query_template = query_template
+    settings_to_display = {k: params[k] for k in params if k in ['chunk_count', 'chunk_count_initial', 'time_weight', 'document_template', 'query_template']}
     yield f"The following settings are now active: {str(settings_to_display)}"
 
 
@@ -246,6 +258,9 @@ def ui():
                 gr.Markdown('Time weighting (optional, used in to make recently added chunks more likely to appear)')
                 time_weight = gr.Slider(0, 1, value=params['time_weight'], label='Time weight', info='Defines the strength of the time weighting. 0 = no time weighting.')
                 chunk_count_initial = gr.Number(value=params['chunk_count_initial'], label='Initial chunk count', info='The number of closest-matching chunks retrieved for time weight reordering in chat mode. This should be >= chunk count. -1 = All chunks are retrieved. Only used if time_weight > 0.')
+                gr.Markdown('Chunk templating (used for embedder models that need prompting)')
+                document_template = gr.Textbox(value=params['document_template'], label='Document template', info='This is how chunks to be retrieved will be embedded. <|text|> gets replaced by the chunk text.')
+                query_template = gr.Textbox(value=params['query_template'], label='Query template', info='This is how query text will be embedded. <|text|> gets replaced by the query text.')
 
                 update_settings = gr.Button('Apply changes')
 
@@ -257,4 +272,4 @@ def ui():
     update_data.click(feed_data_into_collector, [data_input, chunk_len, chunk_sep], last_updated, show_progress=False)
     update_url.click(feed_url_into_collector, [url_input, chunk_len, chunk_sep, strong_cleanup, threads], last_updated, show_progress=False)
     update_file.click(feed_file_into_collector, [file_input, chunk_len, chunk_sep], last_updated, show_progress=False)
-    update_settings.click(apply_settings, [chunk_count, chunk_count_initial, time_weight], last_updated, show_progress=False)
+    update_settings.click(apply_settings, [chunk_count, chunk_count_initial, time_weight, document_template, query_template], last_updated, show_progress=False)
