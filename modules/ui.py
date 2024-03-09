@@ -98,6 +98,7 @@ def list_model_elements():
         'row_split',
         'tensorcores',
         'hqq_backend',
+        'kv_overrides',
     ]
     if is_torch_xpu_available():
         for i in range(torch.xpu.device_count()):

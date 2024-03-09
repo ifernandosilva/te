@@ -46,6 +46,7 @@ loaders_and_params = OrderedDict({
         'no_offload_kqv',
         'row_split',
         'tensorcores',
+        'kv_overrides',
     ],
     'llamacpp_HF': [
         'n_ctx',
@@ -70,6 +71,7 @@ loaders_and_params = OrderedDict({
         'row_split',
         'tensorcores',
         'llamacpp_HF_info',
+        'kv_overrides',
     ],
     'ExLlamav2_HF': [
         'gpu_split',
